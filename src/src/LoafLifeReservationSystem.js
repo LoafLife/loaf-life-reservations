@@ -120,6 +120,9 @@ const LoafLifeReservationSystem = () => {
     }
   };
 
+  // Track reservations by date and pass type
+  const [reservationsByDateState, setReservationsByDateState] = useState({});
+
   // Check availability for a pass type on selected dates
   const checkAvailability = (passType, dates) => {
     const capacity = spaceInventory[passType]?.dailyCapacity || 0;
@@ -339,4 +342,349 @@ const LoafLifeReservationSystem = () => {
                   onClick={() => setSelectedPass(pass)}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-lg
+                    <h3 className="font-semibold text-lg">{pass.name}</h3>
+                    <div className="flex flex-col items-end gap-1">
+                      {(pass.type === 'reserved-commitment' || pass.type === 'reserved-monthly') && (
+                        <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">Reserved</span>
+                      )}
+                      {pass.type === 'private-monthly' && (
+                        <span className="bg-gold-100 text-gold-800 text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">Private</span>
+                      )}
+                      {!isPassAvailableInPeriod(pass.id) && (
+                        <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">Limited</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600 mb-2">${pass.price}</p>
+                  <p className="text-sm text-gray-600 mb-2">{pass.description}</p>
+                  <p className="text-xs text-gray-500">{pass.duration}</p>
+                  {pass.type === 'reserved-commitment' && (
+                    <p className="text-xs text-green-600 font-medium mt-1">Best Value!</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          <button
+            onClick={() => setCurrentStep(2)}
+            disabled={!selectedPass}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {availablePasses.length === 0 ? 'No Passes Available' : 'Continue to Date Selection'}
+          </button>
+        </div>
+      )}
+
+      {/* Step 2: Select Dates */}
+      {currentStep === 2 && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Select Your Dates</h2>
+            <p className="text-sm text-gray-600">
+              {selectedPass?.name} - ${selectedPass?.price}
+              {(selectedPass?.type === 'day' || selectedPass?.type === 'private-day') && selectedDates.length > 0 && ` x ${selectedDates.length} days`}
+            </p>
+          </div>
+
+          {/* Space Information */}
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h3 className="font-medium text-blue-900 mb-1">{spaceInventory[selectedPass.id]?.name}</h3>
+            <p className="text-sm text-blue-700">{spaceInventory[selectedPass.id]?.description}</p>
+            <p className="text-xs text-blue-600 mt-1">
+              Daily capacity: {spaceInventory[selectedPass.id]?.dailyCapacity} 
+              {spaceInventory[selectedPass.id]?.dailyCapacity === 1 ? ' space' : ' spaces'}
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center font-medium text-gray-700 py-2">{day}</div>
+            ))}
+            {calendarDates.map((date) => {
+              const dateString = date.toISOString().split('T')[0];
+              const isSelected = selectedDates.includes(dateString);
+              const isToday = date.toDateString() === new Date().toDateString();
+              const remainingCapacity = getRemainingCapacity(selectedPass.id, dateString);
+              const isAvailable = remainingCapacity > 0;
+              
+              return (
+                <button
+                  key={dateString}
+                  onClick={() => isAvailable && toggleDateSelection(date)}
+                  disabled={!isAvailable}
+                  className={`p-2 text-sm rounded-lg border transition-colors relative ${
+                    !isAvailable
+                      ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : isSelected
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : isToday
+                      ? 'border-blue-300 bg-blue-50 hover:bg-blue-100'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div>{date.getDate()}</div>
+                  {isAvailable && remainingCapacity < spaceInventory[selectedPass.id]?.dailyCapacity && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-400 text-white text-xs rounded-full flex items-center justify-center">
+                      {remainingCapacity}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedDates.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="font-medium">Selected dates:</p>
+              <p className="text-sm text-gray-600">{selectedDates.map(formatDate).join(', ')}</p>
+              <p className="font-semibold mt-2">Total: ${calculateTotal()}</p>
+              {!isSpaceAvailable(selectedPass.id, selectedDates) && (
+                <p className="text-red-600 text-sm mt-2">
+                  ⚠️ Some selected dates have limited availability. Please review your selection.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setCurrentStep(1)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={() => setCurrentStep(3)}
+              disabled={selectedDates.length === 0 || !isSpaceAvailable(selectedPass.id, selectedDates)}
+              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Review & Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Review Selection */}
+      {currentStep === 3 && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-gray-900">Review Your Selection</h2>
+          
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="font-semibold text-lg mb-4">Booking Summary</h3>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="font-medium">Pass Type:</span>
+                <span>{selectedPass.name}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="font-medium">Space:</span>
+                <span>{spaceInventory[selectedPass.id]?.name}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="font-medium">Available Spaces:</span>
+                <div className="text-right text-sm">
+                  {spaceInventory[selectedPass.id]?.spaces.slice(0, 3).join(', ')}
+                  {spaceInventory[selectedPass.id]?.spaces.length > 3 && ` + ${spaceInventory[selectedPass.id]?.spaces.length - 3} more`}
+                </div>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="font-medium">Dates:</span>
+                <div className="text-right">
+                  {selectedDates.map((date, index) => (
+                    <div key={date}>{formatDate(date)}</div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="border-t pt-3 mt-3">
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Total:</span>
+                  <span className="text-blue-600">${calculateTotal()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h4 className="font-medium text-blue-900 mb-2">What's Included:</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              {selectedPass.id === 'first-tracks' && (
+                <>
+                  <li>• Access to all 12 flex desks including Tufts Run, Carrabassett Way, Bigelow Glades</li>
+                  <li>• High-speed WiFi and power outlets at every space</li>
+                  <li>• Coffee and tea service</li>
+                  <li>• Conference room booking (subject to availability)</li>
+                </>
+              )}
+              {selectedPass.id === 'the-gate' && (
+                <>
+                  <li>• Private access to The Gate office for the day</li>
+                  <li>• Lockable door for privacy and security</li>
+                  <li>• Dedicated phone line and premium WiFi</li>
+                  <li>• Coffee and tea service</li>
+                </>
+              )}
+              {(selectedPass.id === 'base-lodge' || selectedPass.id === 'mountain-local') && (
+                <>
+                  <li>• Unlimited access to all 12 flex desk spaces</li>
+                  <li>• Priority booking for premium spots like Cathedral Drop and Spaulding Steeps</li>
+                  <li>• Conference room access included</li>
+                  <li>• Member events and networking opportunities</li>
+                </>
+              )}
+              {(selectedPass.id === 'gondola-month' || selectedPass.id === 'gondola-commitment') && (
+                <>
+                  <li>• Dedicated access to reserved Gondola workstations (1-4)</li>
+                  <li>• Personal storage locker and workspace customization</li>
+                  <li>• Priority booking for conference room and flex spaces</li>
+                  <li>• Member events and networking opportunities</li>
+                </>
+              )}
+              {selectedPass.id === 'private-office' && (
+                <>
+                  <li>• Exclusive access to Ira Mountain private office</li>
+                  <li>• Lockable door with 24/7 access and security</li>
+                  <li>• Dedicated phone line and mailing address</li>
+                  <li>• Priority access to all shared spaces and meeting rooms</li>
+                </>
+              )}
+            </ul>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setCurrentStep(2)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Back to Dates
+            </button>
+            <button
+              onClick={() => setCurrentStep(4)}
+              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Enter Your Information
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Customer Information */}
+      {currentStep === 4 && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-gray-900">Your Information</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                value={customerInfo.name}
+                onChange={(e) => setCustomerInfo(prev => ({...prev, name: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter your full name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <input
+                type="email"
+                value={customerInfo.email}
+                onChange={(e) => setCustomerInfo(prev => ({...prev, email: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter your email address"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+              <input
+                type="tel"
+                value={customerInfo.phone}
+                onChange={(e) => setCustomerInfo(prev => ({...prev, phone: e.target.value}))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter your phone number for access code"
+              />
+              <p className="text-xs text-gray-500 mt-1">You'll receive your door access code via SMS</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-2">Booking Summary:</h3>
+            <p><strong>Pass:</strong> {selectedPass.name}</p>
+            <p><strong>Space:</strong> {spaceInventory[selectedPass.id]?.name}</p>
+            <p><strong>Dates:</strong> {selectedDates.map(formatDate).join(', ')}</p>
+            <p className="text-lg font-bold mt-2">Total: ${calculateTotal()}</p>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setCurrentStep(3)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={() => setCurrentStep(5)}
+              disabled={!customerInfo.name || !customerInfo.email || !customerInfo.phone}
+              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Proceed to Payment
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: Payment */}
+      {currentStep === 5 && (
+        <div className="space-y-6">
+          <h2 className="text-xl font-semibold text-gray-900">Complete Your Reservation</h2>
+          
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-2">Final Booking Summary:</h3>
+            <p><strong>Name:</strong> {customerInfo.name}</p>
+            <p><strong>Email:</strong> {customerInfo.email}</p>
+            <p><strong>Phone:</strong> {customerInfo.phone}</p>
+            <p><strong>Pass:</strong> {selectedPass.name}</p>
+            <p><strong>Space:</strong> {spaceInventory[selectedPass.id]?.name}</p>
+            <p><strong>Dates:</strong> {selectedDates.map(formatDate).join(', ')}</p>
+            <p className="text-xl font-bold mt-2 text-blue-600">Total: ${calculateTotal()}</p>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4">
+            <div className="flex items-center mb-2">
+              <CreditCard className="w-5 h-5 text-blue-600 mr-2" />
+              <h3 className="font-semibold">Secure Payment</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              You'll be redirected to Stripe to complete your payment securely. After payment, 
+              you'll receive an access code via SMS to enter Loaf Life.
+            </p>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setCurrentStep(4)}
+              className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={completeBooking}
+              className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center"
+            >
+              <CreditCard className="w-5 h-5 mr-2" />
+              Complete Booking
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LoafLifeReservationSystem;
